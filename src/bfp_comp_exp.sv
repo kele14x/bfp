@@ -133,6 +133,7 @@ module bfp_comp_exp (
   logic [15:0] max1;
   logic [ 2:0] state1;
   logic        valid1;
+  logic        last1;
 
   always_ff @(posedge clk) begin
     max1 <= get_max4(data0);
@@ -141,6 +142,7 @@ module bfp_comp_exp (
   always_ff @(posedge clk) begin
     state1 <= state0;
     valid1 <= din_valid;
+    last1  <= din_last;
   end
 
   // r2: max of 6 state (1 RB)
@@ -148,6 +150,7 @@ module bfp_comp_exp (
   logic [15:0] max2;
   logic [ 2:0] state2;
   logic        valid2;
+  logic        last2;
 
   always_ff @(posedge clk) begin
     if (valid1) begin
@@ -162,6 +165,7 @@ module bfp_comp_exp (
   always_ff @(posedge clk) begin
     state2 <= state1;
     valid2 <= valid1;
+    last2  <= last1;
   end
 
   // r3: get shift value
@@ -187,14 +191,14 @@ module bfp_comp_exp (
   endgenerate
 
   always_ff @(posedge clk) begin
-    if (valid2 && state2 == 5) begin
+    if (valid2 && (state2 == 5 || last2)) begin
       shift3 <= get_shift(get_msb(max2), ud_iq_width);
       exp3   <= get_exp(get_msb(max2), ud_iq_width);
     end
   end
 
   always_ff @(posedge clk) begin
-    if (valid2 && state2 == 5) begin
+    if (valid2 && (state2 == 5 || last2)) begin
       state3 <= 'd0;
     end else if (valid3) begin
       state3 <= state3 + 1;
@@ -204,9 +208,9 @@ module bfp_comp_exp (
   always_ff @(posedge clk) begin
     if (rst) begin
       valid3 <= 1'b0;
-    end else if (valid2 && state2 == 5) begin
+    end else if (valid2 && (state2 == 5 || last2)) begin
       valid3 <= 1'b1;
-    end else if (state3 == 5) begin
+    end else if (state3 == 5 || last3) begin
       valid3 <= 1'b0;
     end
   end

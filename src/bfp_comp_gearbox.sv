@@ -95,7 +95,16 @@ module bfp_comp_gearbox (
   assign m_axis_tdata  = byte_reverse(tdata);
 
   always_ff @(posedge clk) begin
-    m_axis_tvalid <= (cnt_next[4] && din_valid) || last_extend;
+    if (din_valid && din_last) begin
+      m_axis_tvalid <= 1'b1;
+    end else if (last_extend) begin
+      m_axis_tvalid <= 1'b1;
+    end else if (din_valid && cnt_next >= 16) begin
+      m_axis_tvalid <= 1'b1;
+    end else begin
+      m_axis_tvalid <= 1'b0;
+    end
+    // m_axis_tvalid <= (cnt_next[4] && din_valid) || last_extend;
   end
 
   always_ff @(posedge clk) begin
@@ -109,10 +118,10 @@ module bfp_comp_gearbox (
   end
 
   always_ff @(posedge clk) begin
-    if (din_valid && din_last && cnt_next <= 16) begin
-      m_axis_tkeep <= 8'hFF >> (shift / 8);
+    if (din_valid && din_last && cnt_next < 16) begin
+      m_axis_tkeep <= 8'hFF >> (8 - shift / 8);
     end else if (last_extend) begin
-      m_axis_tkeep <= 8'hFF >> (shift / 8);
+      m_axis_tkeep <= 8'hFF >> (8 - shift / 8);
     end else if (din_valid) begin
       m_axis_tkeep <= 8'hFF;
     end

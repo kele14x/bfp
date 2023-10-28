@@ -4,6 +4,10 @@
 
 module tb_bfp_comp;
 
+  parameter int TC = 100;
+
+  // DUT signals
+
   logic        clk;
   logic        rst;
 
@@ -22,9 +26,12 @@ module tb_bfp_comp;
   logic [ 3:0] ctrl_ud_comp_meth = 1;
   logic [ 3:0] ctrl_ud_iq_width = 9;
 
+  // Test signals
 
-  logic [63:0] test_in        [1024];
-  logic [63:0] test_ref_out   [1024];
+  int          error = 0;
+
+  logic [63:0] test_in               [1024];
+  logic [63:0] test_ref_out          [1024];
 
 
   //
@@ -41,8 +48,8 @@ module tb_bfp_comp;
   //
   // Send a packet
   //
-  task static send_packet(input int nPRBu);
-    int w = nPRBu * 6; // number of words
+  task static send_packet(input int w);
+    int gap;
 
     for (int i = 0; i < w; i++) begin
       s_axis_tdata  <= test_in[i];
@@ -51,14 +58,21 @@ module tb_bfp_comp;
       s_axis_tlast  <= i == w - 1;
       s_axis_tuser  <= '1;
       @(posedge clk);
+
+      // Insert some bubble at data
+      gap = $urandom_range(0, 2);
+      repeat (gap) begin
+        s_axis_tvalid <= 1'b0;
+        @(posedge clk);
+      end
     end
     // Reset interface
     reset();
   endtask
 
   initial begin
-    $readmemh ("test_bfp_comp_in.txt", test_in, 0, 306);
-    $readmemh ("test_bfp_comp_out.txt", test_ref_out, 0, 179);
+    $readmemh("test_bfp_comp_in.txt", test_in, 0, 306);
+    $readmemh("test_bfp_comp_out.txt", test_ref_out, 0, 179);
   end
 
 
@@ -79,32 +93,73 @@ module tb_bfp_comp;
   end
 
   initial begin
+    static int n;
+    $display("*** Simulation started");
     reset();
     wait (rst == 0);
     #100;
 
     @(posedge clk);
-    send_packet(2);
+
+    case (TC)
+      0: begin
+        send_packet(6);
+      end
+
+      1: begin
+        send_packet(12);
+      end
+
+      2: begin
+        send_packet(51 * 6);
+      end
+
+      100: begin
+        send_packet(2);
+      end
+
+      101: begin
+        send_packet(4);
+        send_packet(6);
+      end
+
+      200: begin
+        repeat (10) begin
+          n = $urandom_range(1, 5);
+          $display("Send %d PRBs data", n);
+          send_packet(n * 6);
+        end
+      end
+
+      default: begin
+        $fatal("Unknown Test Case (TC = %d)", TC);
+      end
+    endcase
+
     #1000;
+    if (error) $fatal("Test failed with %0d", error);
+    $display("*** Simulation ends");
     $finish();
   end
 
   initial begin
-    int k = 0;
-    wait(rst == 0);
+    static int k = 0;
+    wait (rst == 0);
 
     forever begin
       @(posedge clk);
       if (m_axis_tvalid) begin
-        $display("TDATA, TKEEP = %x, %x", m_axis_tdata, m_axis_tkeep);
+        $display("%x, %x, %x", m_axis_tdata, m_axis_tkeep, test_ref_out[k]);
         // Check output
-        if (m_axis_tdata != test_ref_out[k]) begin
-          $warning("Result mismatch, ref = %x, out = %x",
-            test_ref_out[k], m_axis_tdata);
+        for (int i = 0; i < 8; i++) begin
+          if (m_axis_tkeep[i] && (m_axis_tdata[i*8+7-:8] != test_ref_out[k][i*8+7-:8])) begin
+            $warning("Result mismatch");
+            error = 1;
+          end
         end
-        k = k + 1;
+        k = m_axis_tlast ? 0 : k + 1;
       end
-    end // forever
+    end  // forever
   end
 
   bfp_comp DUT (.*);
