@@ -41,7 +41,7 @@ module tb_bfp_comp;
   //
   // Send a packet
   //
-  task static send_packet(nPRBu);
+  task static send_packet(input int nPRBu);
     int w = nPRBu * 6; // number of words
 
     for (int i = 0; i < w; i++) begin
@@ -84,7 +84,7 @@ module tb_bfp_comp;
     #100;
 
     @(posedge clk);
-    send_packet(1);
+    send_packet(2);
     #1000;
     $finish();
   end

@@ -70,10 +70,7 @@ module bfp_comp (
 
   assign fifo_din = user0;
   assign fifo_wr  = valid0 && ~sync0;
-
-  always_ff @(posedge clk) begin
-    fifo_rd <= d0_valid & ~d0_sync;
-  end
+  assign fifo_rd  = d0_valid & ~d0_sync;
 
   always_ff @(posedge clk) begin
     if (fifo_rd) begin
