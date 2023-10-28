@@ -30,7 +30,7 @@ module bfp_decomp (
   logic        d0_last;
   logic [31:0] d0_user;
 
-  oran_deframer_dl_ss_decomp_gearbox i_gearbox (
+  bfp_decomp_gearbox i_gearbox (
       .clk                 (clk),
       .rst                 (rst),
       //
@@ -50,7 +50,7 @@ module bfp_decomp (
       .err_unexpected_tlast()
   );
 
-  oran_deframer_dl_ss_decomp_exp i_exp (
+  bfp_decomp_exp i_exp (
       .clk             (clk),
       .rst             (rst),
       //

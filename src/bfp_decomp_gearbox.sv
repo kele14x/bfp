@@ -22,7 +22,7 @@ module bfp_decomp_gearbox (
     output var        err_unexpected_tlast
 );
 
-  import oran_pkg::*;
+  import bfp_pkg::*;
 
   logic         init_n;
   logic         sync_n;

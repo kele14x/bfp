@@ -2,7 +2,7 @@
 //
 `default_nettype none
 
-module tb_bfp_comp;
+module tb_bfp_decomp;
 
   logic        clk;
   logic        rst;
@@ -11,6 +11,7 @@ module tb_bfp_comp;
   logic [ 7:0] s_axis_tkeep;
   logic        s_axis_tvalid;
   logic        s_axis_tlast;
+  logic        s_axis_tready;
   logic [31:0] s_axis_tuser;
 
   logic [63:0] m_axis_tdata;
@@ -21,10 +22,11 @@ module tb_bfp_comp;
 
   logic [ 3:0] ctrl_ud_comp_meth = 1;
   logic [ 3:0] ctrl_ud_iq_width = 9;
+  logic [ 3:0] ctrl_fs_offset = 0;
 
 
-  logic [63:0] test_in        [1024];
-  logic [63:0] test_ref_out   [1024];
+  logic [63:0] test_in               [1024];
+  logic [63:0] test_ref_out          [1024];
 
 
   //
@@ -42,14 +44,14 @@ module tb_bfp_comp;
   // Send a packet
   //
   task static send_packet(nPRBu);
-    int w = nPRBu * 6; // number of words
+    int w = nPRBu * 6;  // number of words
 
     for (int i = 0; i < w; i++) begin
       s_axis_tdata  <= test_in[i];
       s_axis_tkeep  <= '1;
       s_axis_tvalid <= 1'b1;
       s_axis_tlast  <= i == w - 1;
-      s_axis_tuser  <= '1;
+      s_axis_tuser  <= '0;
       @(posedge clk);
     end
     // Reset interface
@@ -57,8 +59,8 @@ module tb_bfp_comp;
   endtask
 
   initial begin
-    $readmemh ("test_bfp_comp_in.txt", test_in, 0, 306);
-    $readmemh ("test_bfp_comp_out.txt", test_ref_out, 0, 179);
+    $readmemh("test_bfp_comp_in.txt", test_in, 0, 306);
+    $readmemh("test_bfp_comp_out.txt", test_ref_out, 0, 179);
   end
 
 
@@ -90,24 +92,17 @@ module tb_bfp_comp;
   end
 
   initial begin
-    int k = 0;
-    wait(rst == 0);
-
+    wait (rst == 0);
     forever begin
       @(posedge clk);
       if (m_axis_tvalid) begin
         $display("TDATA, TKEEP = %x, %x", m_axis_tdata, m_axis_tkeep);
-        // Check output
-        if (m_axis_tdata != test_ref_out[k]) begin
-          $warning("Result mismatch, ref = %x, out = %x",
-            test_ref_out[k], m_axis_tdata);
-        end
-        k = k + 1;
+        if (m_axis_tlast) $display("**EOP\n");
       end
-    end // forever
+    end
   end
 
-  bfp_comp DUT (.*);
+  bfp_decomp DUT (.*);
 
 endmodule
 
