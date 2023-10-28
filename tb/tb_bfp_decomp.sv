@@ -43,24 +43,33 @@ module tb_bfp_decomp;
   //
   // Send a packet
   //
-  task static send_packet(nPRBu);
-    int w = nPRBu * 6;  // number of words
+  task static send_packet(input int nPRBu);
+    int b = nPRBu * (1 + ctrl_ud_iq_width * 3); // number of bytes
+    int w = (b + 7) / 8;  // number of words
+    int r = b % 8; // number of bytes in last word
 
     for (int i = 0; i < w; i++) begin
       s_axis_tdata  <= test_in[i];
-      s_axis_tkeep  <= '1;
+      for (int j = 0; j < 8; j++) begin
+        s_axis_tkeep[j] <= j < r | i < w - 1;
+      end
       s_axis_tvalid <= 1'b1;
       s_axis_tlast  <= i == w - 1;
       s_axis_tuser  <= '0;
-      @(posedge clk);
+      forever begin
+        @(posedge clk);
+        if (s_axis_tready) begin
+          break;
+        end
+      end
     end
     // Reset interface
     reset();
   endtask
 
   initial begin
-    $readmemh("test_bfp_comp_in.txt", test_in, 0, 306);
-    $readmemh("test_bfp_comp_out.txt", test_ref_out, 0, 179);
+    $readmemh("test_bfp_comp_out.txt", test_in, 0, 179);
+    $readmemh("test_bfp_comp_in.txt", test_ref_out, 0, 306);
   end
 
 

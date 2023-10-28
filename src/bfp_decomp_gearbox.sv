@@ -1,3 +1,6 @@
+// File: bfp_decomp_gearbox.sv
+// Brief: Bit remap to get exponent and mantissa field from bit stream.
+// Latency: 2
 `timescale 1 ns / 1 ps
 //
 `default_nettype none
@@ -11,13 +14,14 @@ module bfp_decomp_gearbox (
     input var         s_axis_tvalid,
     input var         s_axis_tlast,
     output var        s_axis_tready,
-    input var  [39:0] s_axis_tuser,         // udCompHdr
     //
-    output var [ 3:0] dout_width,
     output var [63:0] dout_data,
+    output var [ 3:0] dout_state,
+    output var        dout_sync,
     output var        dout_valid,
     output var        dout_last,
-    output var [31:0] dout_user,
+    //
+    input var  [ 3:0] ud_iq_width,
     //
     output var        err_unexpected_tlast
 );
@@ -33,9 +37,6 @@ module bfp_decomp_gearbox (
   logic         extend_tlast;
   logic         extend_tlast_next;
 
-  logic [  3:0] bit_width;
-  logic [  3:0] bit_width_c;
-
   logic [  3:0] bit_remain;
   logic [  3:0] bit_remain_next;
 
@@ -46,14 +47,16 @@ module bfp_decomp_gearbox (
   logic [127:0] temp_data;
 
   logic [  3:0] temp_shift;
-  logic [ 31:0] temp_user;
+  logic [  3:0] temp_state;
   logic         temp_valid;
+  logic         temp_sync;
   logic         temp_last;
+
 
   // Read input
   //-----------
   // State registers: init_n, sync_n, state, extend_tlast, bit_remain
-  // Inputs: s_axis_tvalid, s_axis_tlast, s_axis_tuser, bit_width
+  // Inputs: s_axis_tvalid, s_axis_tlast, s_axis_tuser, ud_iq_width
 
   // Out of reset
   always_ff @(posedge clk) begin
@@ -141,40 +144,14 @@ module bfp_decomp_gearbox (
   // `s_axis_tready` indicates we need input data to process (TREADY)
   assign s_axis_tready = ({1'b0, bit_remain} + bit_required > 16) || (bit_remain == '0) && ~extend_tlast;
 
-  // Number of bit of IQ
-  // At first tick, use bit_width from TUSER, then use registered value
-
-  always_ff @(posedge clk) begin
-    if (~sync_n && s_axis_tvalid && s_axis_tready) begin
-      if (s_axis_tuser[35:32] == 4'b0001) begin  // udCompMeth = BFP
-        bit_width <= s_axis_tuser[39:36];  // udIqWidth
-      end else begin
-        bit_width <= '0;  // assume uncompressed
-      end
-    end
-  end
-
-  always_comb begin
-    if (~sync_n) begin
-      if (s_axis_tuser[35:32] == 4'b0001) begin
-        bit_width_c = s_axis_tuser[39:36];
-      end else begin
-        bit_width_c = '0;
-      end
-    end else begin
-      bit_width_c = bit_width;
-    end
-  end
-
-
   // Required number of bits
   // The register value is real value / 4
 
   always_comb begin
     if (state == 0) begin
-      bit_required = bit_width_c == 0 ? 16 : bit_width_c + 2;
+      bit_required = ud_iq_width == 0 ? 16 : ud_iq_width + 2;
     end else begin
-      bit_required = bit_width_c == 0 ? 16 : bit_width_c;
+      bit_required = ud_iq_width == 0 ? 16 : ud_iq_width;
     end
   end
 
@@ -197,9 +174,9 @@ module bfp_decomp_gearbox (
     end else if (~s_axis_tready && extend_tlast && ({1'b0, bit_remain} + bit_required >= 16)) begin
       bit_remain_next = 0;
     end else if (~s_axis_tready) begin
-      bit_remain_next = (bit_remain + bit_required); // mod 64 naturally
+      bit_remain_next = (bit_remain + bit_required);  // mod 64 naturally
     end else if (s_axis_tvalid && s_axis_tlast && state == 5) begin
-      // we are at state 5, so could safily goes to init state
+      // we are at state 5, so could safely goes to init state
       bit_remain_next = 0;
     end else if (s_axis_tvalid) begin
       // at other state, we still tries go further
@@ -234,7 +211,12 @@ module bfp_decomp_gearbox (
   assign temp_data = {temp_data2, temp_data1};
 
   always_ff @(posedge clk) begin
-    temp_shift <= - bit_remain - bit_required;
+    temp_shift <= -bit_remain - bit_required;
+  end
+
+  always_ff @(posedge clk) begin
+    temp_state <= state;
+    temp_sync  <= sync_n;
   end
 
   always_ff @(posedge clk) begin
@@ -253,19 +235,9 @@ module bfp_decomp_gearbox (
     end
   end
 
-  always_ff @(posedge clk) begin
-    if (~sync_n && s_axis_tvalid && s_axis_tready) begin
-      temp_user <= s_axis_tuser[31:0];
-    end
-  end
-
 
   // Output
   //-------
-
-  always_ff @(posedge clk) begin
-    dout_width <= bit_width;
-  end
 
   always_ff @(posedge clk) begin
     if (temp_valid) begin
@@ -274,15 +246,10 @@ module bfp_decomp_gearbox (
   end
 
   always_ff @(posedge clk) begin
+    dout_state <= temp_state;
     dout_valid <= temp_valid;
-  end
-
-  always_ff @(posedge clk) begin
-    dout_last <= temp_last;
-  end
-
-  always_ff @(posedge clk) begin
-    dout_user <= temp_user;
+    dout_sync  <= temp_sync;
+    dout_last  <= temp_last;
   end
 
 endmodule

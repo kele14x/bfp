@@ -1,3 +1,6 @@
+// File: bfp_decomp_exp.sv
+// Brief: Uncompress the BFP data using shifting.
+// Latency: 3
 `timescale 1 ns / 1 ps
 //
 `default_nettype none
@@ -6,19 +9,19 @@ module bfp_decomp_exp (
     input var         clk,
     input var         rst,
     //
-    input var  [ 3:0] din_width,
     input var  [63:0] din_data,
+    input var  [ 3:0] din_state,
     input var         din_valid,
+    input var         din_sync,
     input var         din_last,
-    input var  [31:0] din_user,
     //
     output var [63:0] m_axis_tdata,
     output var [ 7:0] m_axis_tkeep,
     output var        m_axis_tvalid,
     output var        m_axis_tlast,
-    output var [31:0] m_axis_tuser,
     //
-    input var  [ 3:0] ctrl_extra_shift
+    input var  [ 3:0] ud_iq_width,
+    input var  [ 3:0] ctrl_fs_offset
 );
 
   logic [ 3:0] exp;
@@ -30,11 +33,8 @@ module bfp_decomp_exp (
   logic [30:0] data1      [4];
   logic [15:0] data2      [4];
 
-  logic [ 3:0] state;
-
   logic        din_valid_d[3];
   logic        din_last_d [3];
-  logic [31:0] din_user_d [3];
 
   //
   // This function saturate signed 31-bit to 16-bit
@@ -87,41 +87,29 @@ module bfp_decomp_exp (
     bit_extract = temp[63:48] & bit_mask(width);
   endfunction
 
-  // We need to count how may REs are received
-  // 2 REs / tick and 6 tick / 1 RB
-  always_ff @(posedge clk) begin
-    if (rst) begin
-      state <= '0;
-    end else if (din_valid && din_last) begin
-      state <= '0;
-    end else if (din_valid) begin
-      state <= (state == 5 ? 0 : state + 1);
-    end
-  end
-
   always_comb begin
-    if (din_width == 0) begin
+    if (ud_iq_width == 0) begin
       exp = 0;
     end else begin
-      exp = din_data >> (din_width * 4);
+      exp = din_data >> (ud_iq_width * 4);
     end
   end
 
   generate
     for (genvar i = 0; i < 4; i++) begin : g_bit_extract
       always_ff @(posedge clk) begin
-        data0[i] <= bit_extract(i, din_width, din_data);
+        data0[i] <= bit_extract(i, ud_iq_width, din_data);
       end
     end
   endgenerate
 
   always_ff @(posedge clk) begin
-    width0 <= din_width;
+    width0 <= ud_iq_width;
   end
 
   always_ff @(posedge clk) begin
-    if (state == 0) begin
-      shift0 <= (31 - exp - din_width - ctrl_extra_shift);
+    if (din_state == 0 && din_valid) begin
+      shift0 <= (31 - exp - ud_iq_width - ctrl_fs_offset);
     end
   end
 
@@ -179,14 +167,6 @@ module bfp_decomp_exp (
   end
 
   assign m_axis_tlast = din_last_d[2];
-
-  // TUSER
-
-  always_ff @(posedge clk) begin
-    din_user_d <= {din_user, din_user_d[0:1]};
-  end
-
-  assign m_axis_tuser = din_user_d[2];
 
 endmodule
 
