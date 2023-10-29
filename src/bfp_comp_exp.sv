@@ -149,6 +149,8 @@ module bfp_comp_exp (
 
   logic [15:0] max2;
   logic [ 2:0] state2;
+  logic [ 3:0] shift2;
+  logic [ 3:0] exp2;
   logic        valid2;
   logic        last2;
 
@@ -161,6 +163,9 @@ module bfp_comp_exp (
       end
     end
   end
+
+  assign shift2 = get_shift(get_msb(max2), ud_iq_width);
+  assign exp2   = get_exp(get_msb(max2), ud_iq_width);
 
   always_ff @(posedge clk) begin
     state2 <= state1;
@@ -176,6 +181,7 @@ module bfp_comp_exp (
   logic [ 3:0] shift3;
   logic [ 3:0] exp3;
   logic [ 2:0] state3;
+  logic        empty3;
   logic        valid3;
   logic        sync3;
   logic        last3;
@@ -190,30 +196,16 @@ module bfp_comp_exp (
     end
   endgenerate
 
+  // If exp fifo is not empty, read out data fifo for one RB data
   always_ff @(posedge clk) begin
-    if (valid2 && (state2 == 5 || last2)) begin
-      shift3 <= get_shift(get_msb(max2), ud_iq_width);
-      exp3   <= get_exp(get_msb(max2), ud_iq_width);
+    if (rst || (valid3 && last3)) begin
+      state3 <= '0;
+    end else if (~empty3 || valid3) begin
+      state3 <= state3 == 5 ? 0 : state3 + 1;
     end
   end
 
-  always_ff @(posedge clk) begin
-    if (valid2 && (state2 == 5 || last2)) begin
-      state3 <= 'd0;
-    end else if (valid3) begin
-      state3 <= state3 + 1;
-    end
-  end
-
-  always_ff @(posedge clk) begin
-    if (rst) begin
-      valid3 <= 1'b0;
-    end else if (valid2 && (state2 == 5 || last2)) begin
-      valid3 <= 1'b1;
-    end else if (state3 == 5 || last3) begin
-      valid3 <= 1'b0;
-    end
-  end
+  assign valid3 = ~empty3 || state3 > 0;
 
   always_ff @(posedge clk) begin
     if (rst) begin
@@ -337,6 +329,32 @@ module bfp_comp_exp (
 
   // The full/empty state is not check as we know the FIFO will never full
   // and we will be read at right time
+
+  logic [7:0] exp_fifo_din;
+  logic       exp_fifo_wr;
+  logic [7:0] exp_fifo_dout;
+  logic       exp_fifo_rd;
+
+  assign exp_fifo_din = {shift2, exp2};
+  assign exp_fifo_wr  = valid2 && (state2 == 5 || last2);
+  assign exp_fifo_rd  = (state3 == 0);
+
+  assign {shift3, exp3} = exp_fifo_dout;
+
+  fifo_srl #(
+      .DATA_WIDTH(8)
+  ) i_exp_fifo (
+      .clk  (clk),
+      .rst  (rst),
+      //
+      .din  (exp_fifo_din),
+      .wr_en(exp_fifo_wr),
+      .full (  /* not used */),
+      //
+      .dout (exp_fifo_dout),
+      .empty(empty3),
+      .rd_en(exp_fifo_rd)
+  );
 
   fifo_srl #(
       .DATA_WIDTH(65)

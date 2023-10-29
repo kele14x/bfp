@@ -115,7 +115,7 @@ module tb_bfp_comp;
       end
 
       100: begin
-        send_packet(2);
+        send_packet(7);
       end
 
       101: begin
