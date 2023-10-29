@@ -1,5 +1,9 @@
 // File: bfp_pkg.sv
 // Brief: Package for BFP
+`timescale 1 ns / 1 ps
+//
+`default_nettype none
+
 package bfp_pkg;
 
   //

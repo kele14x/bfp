@@ -132,12 +132,12 @@ module tb_bfp_comp;
       end
 
       default: begin
-        $fatal("Unknown Test Case (TC = %d)", TC);
+        $fatal(0, "Unknown Test Case (TC = %d)", TC);
       end
     endcase
 
     #1000;
-    if (error) $fatal("Test failed with %0d", error);
+    if (error) $fatal(0, "Test failed with %0d", error);
     $display("*** Simulation ends");
     $finish();
   end
