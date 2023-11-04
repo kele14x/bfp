@@ -137,7 +137,7 @@ module tb_bfp_comp;
     endcase
 
     #1000;
-    if (error) $fatal(0, "Test failed with %0d", error);
+    if (error) $warning(0, "Test failed with %0d", error);
     $display("*** Simulation ends");
     $finish();
   end

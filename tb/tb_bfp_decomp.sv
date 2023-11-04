@@ -4,6 +4,10 @@
 
 module tb_bfp_decomp;
 
+  parameter int TC = 0;
+
+  // DUT signals
+
   logic        clk;
   logic        rst;
 
@@ -24,6 +28,9 @@ module tb_bfp_decomp;
   logic [ 3:0] ctrl_ud_iq_width = 9;
   logic [ 3:0] ctrl_fs_offset = 0;
 
+  // Test signals
+
+  int          error = 0;
 
   logic [63:0] test_in               [1024];
   logic [63:0] test_ref_out          [1024];
@@ -43,10 +50,9 @@ module tb_bfp_decomp;
   //
   // Send a packet
   //
-  task static send_packet(input int nPRBu);
-    int b = nPRBu * (1 + ctrl_ud_iq_width * 3); // number of bytes
-    int w = (b + 7) / 8;  // number of words
-    int r = b % 8; // number of bytes in last word
+  task static send_packet(input int nByte);
+    int w = (nByte + 7) / 8;  // number of words
+    int r = nByte % 8; // number of bytes in last word
 
     for (int i = 0; i < w; i++) begin
       s_axis_tdata  <= test_in[i];
@@ -68,8 +74,8 @@ module tb_bfp_decomp;
   endtask
 
   initial begin
-    $readmemh("test_bfp_comp_out.txt", test_in, 0, 179);
-    $readmemh("test_bfp_comp_in.txt", test_ref_out, 0, 306);
+    $readmemh("test_bfp_decomp_in.txt", test_in, 0, 179);
+    $readmemh("test_bfp_decomp_out.txt", test_ref_out, 0, 306);
   end
 
 
@@ -90,23 +96,39 @@ module tb_bfp_decomp;
   end
 
   initial begin
+    $display("*** Simulation started");
     reset();
     wait (rst == 0);
     #100;
-
     @(posedge clk);
-    send_packet(1);
+    
+    case(TC)
+      0: begin
+        send_packet(28);
+      end
+
+      default: begin
+        $fatal(0, "Unknown Test Case (TC = %0d)", TC);
+      end
+    endcase
+
     #1000;
+    if (error) $warning(0, "Test failed with %0d", error);
     $finish();
   end
 
+  final begin
+    $display("*** Simulation ends");
+  end
+
   initial begin
+    static int k = 0;
     wait (rst == 0);
     forever begin
       @(posedge clk);
       if (m_axis_tvalid) begin
-        $display("TDATA, TKEEP = %x, %x", m_axis_tdata, m_axis_tkeep);
-        if (m_axis_tlast) $display("**EOP\n");
+        $display("%x, %x, %x", m_axis_tdata, m_axis_tkeep, test_ref_out[k]);
+        k = m_axis_tlast ? 0 : k + 1;
       end
     end
   end

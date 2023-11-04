@@ -28,7 +28,7 @@ module bfp_decomp_exp (
 
   logic [15:0] data0      [4];
   logic [ 3:0] width0;
-  logic [ 3:0] shift0;
+  logic [ 4:0] shift0;
 
   logic [30:0] data1      [4];
   logic [15:0] data2      [4];
@@ -107,9 +107,12 @@ module bfp_decomp_exp (
     width0 <= ud_iq_width;
   end
 
+  // Since we use 16-bit output, and extra shift value `ctrl_fs_offset` is
+  // needed here. For BFP9 case, set `ctrl_fs_offset` to 8 to support max
+  // 15 exponent. Set `ctrl_fs_offset` to 0 if exponent has max of 7. 
   always_ff @(posedge clk) begin
     if (din_state == 0 && din_valid) begin
-      shift0 <= (31 - exp - ud_iq_width - ctrl_fs_offset);
+      shift0 <= (31 - exp - ud_iq_width + ctrl_fs_offset);
     end
   end
 
